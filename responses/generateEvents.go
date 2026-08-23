@@ -74,6 +74,7 @@ func GenerateEventsData(interaction *discordgo.InteractionCreate) *discordgo.Int
 	msg.WriteString("# All events require a minimum 8 players, except 3v3s which require 9\n")
 	source := rand.New(rand.NewSource(seed))
 	teamChoiceSource := rand.New(rand.NewSource(seed + 1))
+	modifierSource := rand.New(rand.NewSource(seed + 2))
 
 	for i, date := range dates {
 		fmt.Fprintf(&msg, "## %s of %s\n", utils.DayToString(date.Day()), date.Month().String())
@@ -81,7 +82,12 @@ func GenerateEventsData(interaction *discordgo.InteractionCreate) *discordgo.Int
 		events := utils.PickMany(source, utils.Modes, 2)
 
 		for j, event := range events {
-			fmt.Fprintf(&msg, "### Event %s | %s | ", LABELS[(i*2)+j], event.Name)
+			eventName := event.Name
+			if modifier := pickModifier(modifierSource); modifier != "" {
+				eventName = fmt.Sprintf("%s %s", modifier, eventName)
+			}
+
+			fmt.Fprintf(&msg, "### Event %s | %s | ", LABELS[(i*2)+j], eventName)
 			if shouldShowTeamChoice(event.Name) {
 				fmt.Fprintf(&msg, "%s\n", teamChoiceText(teamChoiceSource))
 			} else {
@@ -101,6 +107,26 @@ func GenerateEventsData(interaction *discordgo.InteractionCreate) *discordgo.Int
 	data.SetContent(msg.String())
 
 	return data.InteractionResponseData
+}
+
+func pickModifier(source *rand.Rand) string {
+	total := utils.SumTotal(utils.Modifiers)
+
+	if total == 0 {
+		return ""
+	}
+
+	roll := source.Intn(100)
+
+	cumulative := 0
+	for _, modifier := range utils.Modifiers {
+		cumulative += modifier.Chance
+		if roll < cumulative {
+			return modifier.Name
+		}
+	}
+
+	return ""
 }
 
 func shouldShowTeamChoice(format string) bool {
